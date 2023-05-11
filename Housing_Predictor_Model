@@ -1,0 +1,128 @@
+# Importing the libraries
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+import seaborn as sb
+
+from google.colab import files
+uploaded = files.upload()
+
+import io 
+data = pd.read_csv(io.BytesIO(uploaded['house_data.csv'])) #importing our data as a csv file
+
+#training data
+df=pd.DataFrame(data)
+print(df)
+
+train_pd, test_pd, val_pd= df[:100], df[100:153], df[153:206] #getting training data, testing and validating data
+len(train_pd), len(test_pd), len(val_pd) #just verifying if the test and validating data are equal
+
+X_train, y_train = train_pd.to_numpy()[:, :-1], train_pd.to_numpy()[:, -1]
+X_val, y_val = val_pd.to_numpy()[:, :-1], val_pd.to_numpy()[:, -1]
+X_test, y_test = test_pd.to_numpy()[:, :-1], test_pd.to_numpy()[:, -1]
+
+X_train.shape, y_train.shape, X_val.shape, y_val.shape, X_test.shape, y_test.shape
+
+from sklearn.preprocessing import StandardScaler # scale the data because the range of values in columns are very diff 
+                                                 #to standardize the data and make normal distribution centered around 0s
+scaler=StandardScaler().fit(X_train[:, :9])
+
+def preprocessor(X): 
+  A=np.copy(X)
+  A[:, :9]=scaler.transform(A[:, :9])
+  return A
+
+X_train, X_val, X_test=preprocessor(X_train), preprocessor(X_val), preprocessor(X_train)
+
+X_train.shape, X_val.shape, X_test.shape
+ 
+#using mean squared error, bigger the value is is worse and the closer to 0 is better
+from sklearn.metrics import mean_squared_error as mse 
+from sklearn.linear_model import LinearRegression #linear regression model
+
+lm=LinearRegression().fit(X_train, y_train)
+mse(lm.predict(X_train), y_train, squared=False), mse(lm.predict(X_val), y_val, squared=False)
+# ^ training error                                   ^ validation error
+
+
+#takes n number of neighbors and takes the mean of it and compares
+#trying to get the diff closest to 0 as possible
+from sklearn.neighbors import KNeighborsRegressor
+
+knn=KNeighborsRegressor(n_neighbors=10).fit(X_train, y_train) 
+mse(knn.predict(X_train), y_train, squared=False), mse(knn.predict(X_val), y_val, squared=False)
+
+#random forest regressor which makes decision trees and combines the results to make an overall prediction
+from sklearn.ensemble import RandomForestRegressor
+
+rfr=RandomForestRegressor(max_depth=10).fit(X_train, y_train) #max_depth is the max depth of tree
+mse(rfr.predict(X_train), y_train, squared=False), mse(rfr.predict(X_val), y_val, squared=False)
+
+#calculates the diff between current prediction and known target val
+from sklearn.ensemble import GradientBoostingRegressor
+
+gbr=GradientBoostingRegressor(n_estimators=30).fit(X_train, y_train) 
+mse(gbr.predict(X_train), y_train, squared=False), mse(gbr.predict(X_val), y_val, squared=False)
+
+from tensorflow.keras.models import Sequential #making neural network with layers in order
+from tensorflow.keras.layers import *
+from tensorflow.keras.callbacks import ModelCheckpoint #as model trains, it trains through a "epoch"; an epoch is one run through the data and it makes updates during the epoch
+                                                       #model checkpoint will save the best model with the least validation error
+from tensorflow.keras.metrics import RootMeanSquaredError #report and compare with numbers
+from tensorflow.keras.optimizers import Adam
+
+simple_nn = Sequential()
+simple_nn.add(InputLayer((9,)))
+simple_nn.add(Dense(2, 'relu'))
+simple_nn.add(Dense(1, 'linear'))
+
+#training first model
+
+opt = Adam(learning_rate=.1)
+cp = ModelCheckpoint('models/simple_nn', save_best_only=True)
+simple_nn.compile(optimizer=opt, loss='mse', metrics=[RootMeanSquaredError()])
+simple_nn.fit(x=X_train, y=y_train, validation_data=(X_val, y_val), callbacks=[cp], epochs=100)
+
+from tensorflow.keras.models import load_model
+
+simple_nn=load_model('models/simple_nn')
+mse(simple_nn.predict(X_train), y_train, squared=False), mse(simple_nn.predict(X_val), y_val, squared=False)
+
+medium_nn = Sequential()
+medium_nn.add(InputLayer((9,)))
+medium_nn.add(Dense(32, 'relu'))
+medium_nn.add(Dense(16, 'relu'))
+medium_nn.add(Dense(1, 'linear'))
+
+#training first model
+
+opt = Adam(learning_rate=.1)
+cp = ModelCheckpoint('models/medium_nn', save_best_only=True)
+medium_nn.compile(optimizer=opt, loss='mse', metrics=[RootMeanSquaredError()])
+medium_nn.fit(x=X_train, y=y_train, validation_data=(X_val, y_val), callbacks=[cp], epochs=100)
+
+medium_nn=load_model('models/medium_nn')
+mse(medium_nn.predict(X_train), y_train, squared=False), mse(medium_nn.predict(X_val), y_val, squared=False)
+
+large_nn = Sequential()
+large_nn.add(InputLayer((9,)))
+large_nn.add(Dense(256, 'relu'))
+large_nn.add(Dense(128, 'relu'))
+large_nn.add(Dense(64, 'relu'))
+large_nn.add(Dense(32, 'relu'))
+large_nn.add(Dense(1, 'linear'))
+
+#training first model
+
+opt = Adam(learning_rate=.1)
+cp = ModelCheckpoint('models/large_nn', save_best_only=True)
+large_nn.compile(optimizer=opt, loss='mse', metrics=[RootMeanSquaredError()])
+large_nn.fit(x=X_train, y=y_train, validation_data=(X_val, y_val), callbacks=[cp], epochs=100)
+
+
+large_nn=load_model('models/large_nn')
+mse(large_nn.predict(X_train), y_train, squared=False), mse(large_nn.predict(X_val), y_val, squared=False)
+
+large_nn=load_model('models/large_nn')
+mse(large_nn.predict(X_test), y_test, squared=False)
+
